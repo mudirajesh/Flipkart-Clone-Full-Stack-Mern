@@ -3,6 +3,7 @@ import CartProductModel from "../models/cartproduct.model.js"
 import OrderModel from "../models/order.model.js"
 import UserModel from "../models/user.model.js"
 import mongoose from "mongoose"
+import generateInvoicePdf from "../utils/generateInvoicePdf.js"
 
 export async function CashOnDeliveryOrderController(request, response) {
   try {
@@ -204,6 +205,52 @@ export async function getOrderDetailsController(request, response) {
       error: false,
       success: true,
     })
+  } catch (error) {
+    return response.status(500).json({
+      message: error.message || error,
+      error: true,
+      success: false,
+    })
+  }
+}
+
+//http://localhost:8080/api/order/invoice/:orderId
+export async function downloadInvoiceController(request, response) {
+  try {
+    const userId = request.userId // auth middleware
+    const { orderId } = request.params
+
+    if (!orderId) {
+      return response.status(400).json({
+        message: "Provide orderId",
+        error: true,
+        success: false,
+      })
+    }
+
+    // ownership check: the order must belong to the logged-in user
+    const order = await OrderModel.findOne({ orderId: orderId, userId: userId })
+      .populate("delivery_address")
+      .populate("userId", "name email mobile")
+
+    if (!order) {
+      return response.status(404).json({
+        message: "Order not found",
+        error: true,
+        success: false,
+      })
+    }
+
+    const pdfBuffer = await generateInvoicePdf(order)
+
+    response.setHeader("Content-Type", "application/pdf")
+    response.setHeader(
+      "Content-Disposition",
+      `attachment; filename=Invoice-${order.orderId}.pdf`
+    )
+    response.setHeader("Content-Length", pdfBuffer.length)
+
+    return response.status(200).send(pdfBuffer)
   } catch (error) {
     return response.status(500).json({
       message: error.message || error,

@@ -2,7 +2,8 @@ import React, { useState } from "react"
 import { useGlobalContext } from "../provider/GlobalProvider"
 import { DisplayPriceInRupees } from "../utils/DisplayPriceInRupees"
 import AddAddress from "../components/AddAddress"
-import { useSelector } from "react-redux"
+import { useDispatch, useSelector } from "react-redux"
+import { setSelectedAddress } from "../store/addressSlice"
 import AxiosToastError from "../utils/AxiosToastError"
 import Axios from "../utils/Axios"
 import SummaryApi from "../common/SummaryApi"
@@ -20,17 +21,33 @@ const CheckoutPage = () => {
   } = useGlobalContext()
   const [openAddress, setOpenAddress] = useState(false)
   const addressList = useSelector((state) => state.addresses.addressList)
-  const [selectAddress, setSelectAddress] = useState(0)
+  const selectedAddressId = useSelector(
+    (state) => state.addresses.selectedAddressId
+  )
   const cartItemsList = useSelector((state) => state.cartItem.cart)
   const navigate = useNavigate()
+  const dispatch = useDispatch()
+
+  // only an active (not deleted) saved address counts as a valid selection
+  const getSelectedAddress = () =>
+    addressList.find(
+      (address) => address._id === selectedAddressId && address.status
+    )
 
   const handleCashOnDelivery = async () => {
+    // address selection is compulsory before placing an order
+    const selectedAddress = getSelectedAddress()
+    if (!selectedAddress) {
+      toast.error("Please select a delivery address before placing the order")
+      return
+    }
+
     try {
       const response = await Axios({
         ...SummaryApi.CashOnDeliveryOrder,
         data: {
           list_items: cartItemsList,
-          addressId: addressList[selectAddress]?._id,
+          addressId: selectedAddress._id,
           subTotalAmt: totalPrice,
           totalAmt: totalPrice,
         },
@@ -59,18 +76,16 @@ const CheckoutPage = () => {
 
   const handleOnlinePayment = async () => {
     try {
-      // Validate if address is selected
-      if (!addressList[selectAddress]) {
-        toast.error("Please select a delivery address")
+      // address selection is compulsory before placing an order
+      const selectedAddress = getSelectedAddress()
+      if (!selectedAddress) {
+        toast.error("Please select a delivery address before placing the order")
         return
       }
 
       toast.loading("Loading...")
       const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY
       const stripePromise = await loadStripe(stripePublicKey)
-
-      // Get selected address details
-      const selectedAddress = addressList[selectAddress]
 
       const response = await Axios({
         ...SummaryApi.payment_url,
@@ -116,16 +131,14 @@ const CheckoutPage = () => {
 
   const handleRazorpayPayment = async () => {
     try {
-      // Validate if address is selected
-      if (!addressList[selectAddress]) {
-        toast.error("Please select a delivery address")
+      // address selection is compulsory before placing an order
+      const selectedAddress = getSelectedAddress()
+      if (!selectedAddress) {
+        toast.error("Please select a delivery address before placing the order")
         return
       }
 
       toast.loading("Initializing payment...")
-      
-      // Get selected address details
-      const selectedAddress = addressList[selectAddress]
 
       // Create Razorpay order
       const response = await Axios({
@@ -226,23 +239,35 @@ const CheckoutPage = () => {
           <h3 className="text-lg font-semibold">Choose your address</h3>
           <div className="bg-white p-2 grid gap-4">
             {addressList.map((address, index) => {
+              const isSelected = address._id === selectedAddressId
               return (
                 <label
                   htmlFor={"address" + index}
-                  className={!address.status && "hidden"}
+                  className={!address.status ? "hidden" : "cursor-pointer"}
                   key={address._id || index}
                 >
-                  <div className="border rounded p-3 flex gap-3 hover:bg-blue-50">
+                  <div
+                    className={`border rounded p-3 flex gap-3 hover:bg-blue-50 ${
+                      isSelected ? "border-blue-600 border-2 bg-blue-50" : ""
+                    }`}
+                  >
                     <div>
                       <input
                         id={"address" + index}
                         type="radio"
-                        value={index}
-                        onChange={(e) => setSelectAddress(e.target.value)}
+                        checked={isSelected}
+                        onChange={() =>
+                          dispatch(setSelectedAddress(address._id))
+                        }
                         name="address"
                       />
                     </div>
                     <div>
+                      {isSelected && (
+                        <p className="text-xs font-semibold text-blue-600 mb-1">
+                          Current Address
+                        </p>
+                      )}
                       <p>{address.address_line}</p>
                       <p>{address.city}</p>
                       <p>{address.state}</p>
@@ -255,6 +280,12 @@ const CheckoutPage = () => {
                 </label>
               )
             })}
+            {!addressList.some((address) => address.status) && (
+              <p className="text-sm text-red-500">
+                No saved address found. Please add a delivery address to place
+                your order.
+              </p>
+            )}
             <div
               onClick={() => setOpenAddress(true)}
               className="h-16 bg-blue-50 border-2 border-dashed flex justify-center items-center cursor-pointer"

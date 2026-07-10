@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { useSelector } from 'react-redux'
+import { useDispatch, useSelector } from 'react-redux'
+import { setSelectedAddress } from '../store/addressSlice'
 import AddAddress from '../components/AddAddress'
 import { MdDelete } from "react-icons/md";
 import { MdEdit } from "react-icons/md";
@@ -12,10 +13,12 @@ import { useGlobalContext } from '../provider/GlobalProvider';
 
 const Address = () => {
   const addressList = useSelector(state => state.addresses.addressList)
+  const selectedAddressId = useSelector(state => state.addresses.selectedAddressId)
   const [openAddress,setOpenAddress] = useState(false)
   const [OpenEdit,setOpenEdit] = useState(false)
   const [editData,setEditData] = useState({})
   const { fetchAddress} = useGlobalContext()
+  const dispatch = useDispatch()
 
   const handleDisableAddress = async(id)=>{
     try {
@@ -46,9 +49,24 @@ const Address = () => {
         <div className='bg-blue-50 p-2 grid gap-4'>
               {
                 addressList.map((address,index)=>{
+                  const isCurrent = address._id === selectedAddressId
                   return(
-                      <div className={`border rounded p-3 flex gap-3 bg-white ${!address.status && 'hidden'}`}>
+                      <div key={address._id || index} className={`border rounded p-3 flex gap-3 bg-white ${!address.status && 'hidden'} ${isCurrent ? 'border-green-600 border-2' : ''}`}>
                           <div className='w-full'>
+                            {
+                              isCurrent ? (
+                                <span className='inline-block text-xs font-semibold px-2 py-0.5 mb-2 rounded bg-green-100 text-green-700'>
+                                  Current Address
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={()=>dispatch(setSelectedAddress(address._id))}
+                                  className='inline-block text-xs font-semibold px-2 py-0.5 mb-2 rounded border border-green-600 text-green-700 hover:bg-green-600 hover:text-white'
+                                >
+                                  Set as Current
+                                </button>
+                              )
+                            }
                             <p>{address.address_line}</p>
                             <p>{address.city}</p>
                             <p>{address.state}</p>

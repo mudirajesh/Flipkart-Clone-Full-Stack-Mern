@@ -156,6 +156,10 @@ const SummaryApi = {
     url: "/api/order/order-list",
     method: "get",
   },
+  downloadInvoice: {
+    url: "/api/order/invoice",
+    method: "get",
+  },
   
   // Razorpay endpoints
   createRazorpayOrder: {
